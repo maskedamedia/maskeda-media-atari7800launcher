@@ -53,7 +53,11 @@ if [[ -f "${APP_ICON_SOURCE}" ]]; then
   iconutil -c icns "${ICONSET_DIR}" -o "${ICON_FILE}"
 fi
 
-/usr/bin/zip -qry "${DIST_DIR}/${APP_NAME}.zip" "${APP_DIR}"
+rm -f "${DIST_DIR}/${APP_NAME}.zip"
+(
+  cd "${DIST_DIR}"
+  /usr/bin/zip -qry "${APP_NAME}.zip" "${APP_NAME}.app"
+)
 
 echo "app bundle: ${APP_DIR}"
 echo "zip archive: ${DIST_DIR}/${APP_NAME}.zip"

@@ -16,7 +16,6 @@ public struct ContentView: View {
         case input = "Input"
         case video = "Video"
         case audio = "Audio"
-        case help = "Help"
         case debug = "Debug"
 
         var id: String { rawValue }
@@ -25,6 +24,8 @@ public struct ContentView: View {
     @ObservedObject private var host: LibretroCoreHost
     @State private var panelMode: PanelMode = .launcher
     @State private var settingsTab: SettingsTab = .general
+    @State private var bottomPaneHeight: CGFloat = 275
+    @State private var dragStartPaneHeight: CGFloat?
 
     private let editableKeyChoices: [(label: String, keyCode: UInt16)] = [
         ("Up Arrow", 126),
@@ -53,12 +54,16 @@ public struct ContentView: View {
     }
 
     public var body: some View {
-        VSplitView {
-            GeometryReader { proxy in
+        GeometryReader { geometry in
+            let minimumPaneHeight: CGFloat = 120
+            let maximumPaneHeight = min(CGFloat(420), max(minimumPaneHeight, geometry.size.height - 240))
+            let clampedPaneHeight = min(max(bottomPaneHeight, minimumPaneHeight), maximumPaneHeight)
+
+            VStack(spacing: 0) {
                 Group {
                     if host.renderer.isSupported {
                         MetalViewRepresentable(renderer: host.renderer, inputManager: host.inputManager)
-                            .frame(width: max(proxy.size.width, 320), height: max(proxy.size.height, 240))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(Color.black)
                     } else {
                         VStack(alignment: .leading, spacing: 12) {
@@ -70,15 +75,43 @@ public struct ContentView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
 
-            ScrollView([.horizontal, .vertical]) {
-                bottomPanel
+                ZStack {
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.14))
+                    Capsule()
+                        .fill(Color.secondary.opacity(0.6))
+                        .frame(width: 64, height: 6)
+                }
+                .frame(height: 14)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            let start = dragStartPaneHeight ?? clampedPaneHeight
+                            if dragStartPaneHeight == nil {
+                                dragStartPaneHeight = start
+                            }
+                            bottomPaneHeight = min(max(start - value.translation.height, minimumPaneHeight), maximumPaneHeight)
+                        }
+                        .onEnded { _ in
+                            dragStartPaneHeight = nil
+                        }
+                )
+                .help("Drag to resize the bottom panel")
+
+                ScrollView([.horizontal, .vertical]) {
+                    bottomPanel
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+                .scrollIndicators(.visible)
+                .frame(maxWidth: .infinity)
+                .frame(height: clampedPaneHeight, alignment: .top)
+                .background(.regularMaterial)
             }
-            .scrollIndicators(.visible)
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: 150, idealHeight: 150, maxHeight: 420)
-            .background(.regularMaterial)
+            .onAppear {
+                bottomPaneHeight = min(max(bottomPaneHeight, minimumPaneHeight), maximumPaneHeight)
+            }
         }
         .frame(minWidth: 980, minHeight: 620)
     }
@@ -221,7 +254,6 @@ public struct ContentView: View {
         if host.coreOptions(for: .audio).isEmpty == false {
             tabs.append(.audio)
         }
-        tabs.append(.help)
         tabs.append(.debug)
         return tabs
     }
@@ -252,8 +284,6 @@ public struct ContentView: View {
                 videoSettings
             case .audio:
                 audioSettings
-            case .help:
-                helpSettings
             case .debug:
                 debugSettings
             }
@@ -362,9 +392,71 @@ public struct ContentView: View {
     private var inputSettings: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                GroupBox("Player Devices") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Assign one input source per player. A keyboard or controller can only be assigned to one player at a time.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+
+                        HStack(alignment: .center, spacing: 12) {
+                            Text("Player 1")
+                                .frame(width: 140, alignment: .leading)
+
+                            Picker("Player 1 Device", selection: Binding(
+                                get: { host.player1DeviceID },
+                                set: { host.setInputDevice($0, forPlayer: 0) }
+                            )) {
+                                Text("None").tag("")
+                                ForEach(host.inputDevices(forPlayer: 0)) { device in
+                                    Text(device.name).tag(device.id)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+
+                            Text(host.inputDeviceName(for: host.player1DeviceID))
+                                .font(.system(.footnote, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        HStack(alignment: .center, spacing: 12) {
+                            Text("Player 2")
+                                .frame(width: 140, alignment: .leading)
+
+                            Picker("Player 2 Device", selection: Binding(
+                                get: { host.player2DeviceID },
+                                set: { host.setInputDevice($0, forPlayer: 1) }
+                            )) {
+                                Text("None").tag("")
+                                ForEach(host.inputDevices(forPlayer: 1)) { device in
+                                    Text(device.name).tag(device.id)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+
+                            Text(host.inputDeviceName(for: host.player2DeviceID))
+                                .font(.system(.footnote, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        if host.availableInputDevices.isEmpty == false {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Detected Devices")
+                                    .font(.headline)
+                                ForEach(host.availableInputDevices) { device in
+                                    Text("- \(device.name)")
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
                 GroupBox("Keyboard Mapping") {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("These mappings are saved automatically. Game controller support can be layered onto the same action model later.")
+                        Text("Keyboard mappings are shared by whichever player is assigned to Keyboard. Controller mappings follow the standard gamepad layout exposed by macOS.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
 
@@ -399,6 +491,8 @@ public struct ContentView: View {
                         Text("Console Select is used for system-level game selection on some titles.")
                         Text("Console Pause is the 7800 console pause switch.")
                         Text("Console Reset restarts the current title.")
+                        Text("Controllers use the standard macOS gamepad layout: d-pad or left stick for movement, primary face buttons for Button 1 and Button 2, and menu/shoulder buttons for console controls where available.")
+                            .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -436,39 +530,6 @@ public struct ContentView: View {
                     options: host.coreOptions(for: .audio),
                     emptyState: "This core has not exposed any audio-specific options yet."
                 )
-            }
-        }
-    }
-
-    private var helpSettings: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                GroupBox("Support") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Email")
-                            .font(.headline)
-                        Text("info@maskedamedia.com")
-                            .textSelection(.enabled)
-
-                        Text("Website")
-                            .font(.headline)
-                        Link("retrogaming.maskedamedia.com", destination: URL(string: "https://retrogaming.maskedamedia.com")!)
-
-                        Text("Git Repository")
-                            .font(.headline)
-                        Link("github.com/mpro-maskeda/maskeda-media-atari7800launcher", destination: URL(string: "https://github.com/mpro-maskeda/maskeda-media-atari7800launcher")!)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
-                GroupBox("Project Notes") {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("This launcher hosts the Atari 7800 libretro core as a focused native macOS frontend.")
-                        Text("The repository may be private during development. Public release state depends on your GitHub workflow.")
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
             }
         }
     }

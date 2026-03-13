@@ -59,6 +59,19 @@ public final class LibretroCoreHost: ObservableObject, @unchecked Sendable {
     @Published public private(set) var availableROMs: [ROMItem] = []
     @Published public private(set) var coreOptions: [CoreOption] = []
     @Published public private(set) var inputMappings: [InputAction: UInt16]
+    @Published public private(set) var availableInputDevices: [InputDeviceInfo] = []
+    @Published public var player1DeviceID: String {
+        didSet {
+            guard oldValue != player1DeviceID else { return }
+            assignInputDevice(player1DeviceID, to: 0)
+        }
+    }
+    @Published public var player2DeviceID: String {
+        didSet {
+            guard oldValue != player2DeviceID else { return }
+            assignInputDevice(player2DeviceID, to: 1)
+        }
+    }
     @Published public var debugLoggingEnabled = false {
         didSet { persistSettings() }
     }
@@ -143,11 +156,19 @@ public final class LibretroCoreHost: ObservableObject, @unchecked Sendable {
         saveDirectoryPath = configuration.saveDirectory ?? saved.saveDirectoryPath
         selectedCoreOptionValues = saved.coreOptionValues
         inputMappings = saved.inputMappings
+        player1DeviceID = saved.player1DeviceID
+        player2DeviceID = saved.player2DeviceID
         inputManager.debugLogger = { [weak self] line in
             self?.debugLog(line)
         }
+        inputManager.devicesChanged = { [weak self] devices in
+            self?.updateAvailableInputDevices(devices)
+        }
         renderer.sharpPixelsEnabled = sharpPixelsEnabled
         inputManager.configureMappings(inputMappings)
+        inputManager.configureAssignedDeviceID(player1DeviceID, for: 0)
+        inputManager.configureAssignedDeviceID(player2DeviceID, for: 1)
+        updateAvailableInputDevices(inputManager.currentDevices())
         ensureDirectories()
         refreshROMDirectorySelection()
         syncSelectionFromROMPath()
@@ -330,7 +351,12 @@ public final class LibretroCoreHost: ObservableObject, @unchecked Sendable {
         systemDirectoryPath = defaults.system
         saveDirectoryPath = defaults.save
         inputMappings = defaultMappings
+        player1DeviceID = InputManager.keyboardDeviceID
+        player2DeviceID = ""
         inputManager.configureMappings(defaultMappings)
+        inputManager.configureAssignedDeviceID(player1DeviceID, for: 0)
+        inputManager.configureAssignedDeviceID(player2DeviceID, for: 1)
+        updateAvailableInputDevices(inputManager.currentDevices())
         renderer.sharpPixelsEnabled = sharpPixelsEnabled
 
         for key in DefaultsKey.allCases {
@@ -355,6 +381,30 @@ public final class LibretroCoreHost: ObservableObject, @unchecked Sendable {
 
     public func keyDisplayName(for action: InputAction) -> String {
         InputManager.displayName(for: inputMappings[action] ?? action.defaultKeyCode)
+    }
+
+    public func inputDevices(forPlayer port: UInt32) -> [InputDeviceInfo] {
+        let otherPort: UInt32 = port == 0 ? 1 : 0
+        let otherSelection = inputManager.assignedDeviceID(for: otherPort)
+        if otherSelection.isEmpty {
+            return availableInputDevices
+        }
+        return availableInputDevices.filter { $0.id != otherSelection }
+    }
+
+    public func inputDeviceName(for deviceID: String) -> String {
+        if deviceID.isEmpty {
+            return "None"
+        }
+        return availableInputDevices.first(where: { $0.id == deviceID })?.name ?? deviceID
+    }
+
+    public func setInputDevice(_ deviceID: String, forPlayer port: UInt32) {
+        if port == 0 {
+            player1DeviceID = deviceID
+        } else {
+            player2DeviceID = deviceID
+        }
     }
 
     nonisolated func handleEnvironment(command: UInt32, data: UnsafeMutableRawPointer?) -> Bool {
@@ -758,6 +808,8 @@ public final class LibretroCoreHost: ObservableObject, @unchecked Sendable {
     private func persistSettings() {
         userDefaults.set(debugLoggingEnabled, forKey: DefaultsKey.debugLoggingEnabled.rawValue)
         userDefaults.set(sharpPixelsEnabled, forKey: DefaultsKey.sharpPixelsEnabled.rawValue)
+        userDefaults.set(player1DeviceID, forKey: DefaultsKey.player1DeviceID.rawValue)
+        userDefaults.set(player2DeviceID, forKey: DefaultsKey.player2DeviceID.rawValue)
         userDefaults.set(selectedCorePath, forKey: DefaultsKey.corePath.rawValue)
         userDefaults.set(romDirectoryPath, forKey: DefaultsKey.romDirectoryPath.rawValue)
         userDefaults.set(selectedROMPath, forKey: DefaultsKey.selectedROMPath.rawValue)
@@ -765,6 +817,55 @@ public final class LibretroCoreHost: ObservableObject, @unchecked Sendable {
         userDefaults.set(saveDirectoryPath, forKey: DefaultsKey.saveDirectoryPath.rawValue)
         userDefaults.set(selectedCoreOptionValues, forKey: DefaultsKey.coreOptionValues.rawValue)
         userDefaults.set(serializedInputMappings(), forKey: DefaultsKey.inputMappings.rawValue)
+    }
+
+    private func assignInputDevice(_ deviceID: String, to port: UInt32) {
+        let otherPort: UInt32 = port == 0 ? 1 : 0
+        let otherSelection = inputManager.assignedDeviceID(for: otherPort)
+        if deviceID.isEmpty == false, deviceID == otherSelection {
+            if port == 0 {
+                player1DeviceID = inputManager.assignedDeviceID(for: port)
+            } else {
+                player2DeviceID = inputManager.assignedDeviceID(for: port)
+            }
+            return
+        }
+
+        inputManager.configureAssignedDeviceID(deviceID, for: port)
+        let resolved = inputManager.assignedDeviceID(for: port)
+        if port == 0 {
+            if player1DeviceID != resolved {
+                player1DeviceID = resolved
+                return
+            }
+        } else if player2DeviceID != resolved {
+            player2DeviceID = resolved
+            return
+        }
+
+        persistSettings()
+        objectWillChange.send()
+    }
+
+    private func updateAvailableInputDevices(_ devices: [InputDeviceInfo]) {
+        let apply = {
+            self.availableInputDevices = devices
+            let player1Resolved = devices.contains(where: { $0.id == self.player1DeviceID }) ? self.player1DeviceID : InputManager.keyboardDeviceID
+            let player2Resolved = devices.contains(where: { $0.id == self.player2DeviceID }) ? self.player2DeviceID : ""
+            self.inputManager.configureAssignedDeviceID(player1Resolved, for: 0)
+            self.inputManager.configureAssignedDeviceID(player2Resolved, for: 1)
+            self.player1DeviceID = self.inputManager.assignedDeviceID(for: 0)
+            self.player2DeviceID = self.inputManager.assignedDeviceID(for: 1)
+            self.persistSettings()
+        }
+
+        if Thread.isMainThread {
+            apply()
+        } else {
+            DispatchQueue.main.async {
+                apply()
+            }
+        }
     }
 
     private func ensureDirectories() {
@@ -810,7 +911,9 @@ public final class LibretroCoreHost: ObservableObject, @unchecked Sendable {
             systemDirectoryPath: defaults.string(forKey: DefaultsKey.systemDirectoryPath.rawValue) ?? defaultPaths.system,
             saveDirectoryPath: defaults.string(forKey: DefaultsKey.saveDirectoryPath.rawValue) ?? defaultPaths.save,
             coreOptionValues: defaults.dictionary(forKey: DefaultsKey.coreOptionValues.rawValue) as? [String: String] ?? [:],
-            inputMappings: savedInputMappings(defaults: defaults)
+            inputMappings: savedInputMappings(defaults: defaults),
+            player1DeviceID: defaults.string(forKey: DefaultsKey.player1DeviceID.rawValue) ?? InputManager.keyboardDeviceID,
+            player2DeviceID: defaults.string(forKey: DefaultsKey.player2DeviceID.rawValue) ?? ""
         )
     }
 
@@ -960,6 +1063,8 @@ private extension LibretroCoreHost {
     enum DefaultsKey: String, CaseIterable {
         case debugLoggingEnabled
         case sharpPixelsEnabled
+        case player1DeviceID
+        case player2DeviceID
         case corePath
         case romDirectoryPath
         case selectedROMPath
@@ -979,6 +1084,8 @@ private extension LibretroCoreHost {
         let saveDirectoryPath: String
         let coreOptionValues: [String: String]
         let inputMappings: [InputAction: UInt16]
+        let player1DeviceID: String
+        let player2DeviceID: String
     }
 }
 

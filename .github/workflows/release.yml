@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    runs-on: [self-hosted, macOS, ARM64]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build packaged app
+        run: make package
+
+      - name: Read packaged version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PLIST="dist/Atari7800Launcher.app/Contents/Info.plist"
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PLIST")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Upload packaged zip as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Atari7800Launcher-${{ steps.version.outputs.version }}
+          path: dist/Atari7800Launcher.zip
+          if-no-files-found: error
+
+      - name: Create or update release tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          SHA="${{ github.sha }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            git tag -d "$TAG"
+          fi
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "$TAG"; then
+            git push origin ":refs/tags/$TAG"
+          fi
+          git tag "$TAG" "$SHA"
+          git push origin "$TAG"
+
+      - name: Create or update GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          TITLE="Atari7800Launcher $TAG"
+          NOTES_FILE="$(mktemp)"
+          {
+            echo "Automated release for build $TAG."
+            echo
+            echo "Artifacts:"
+            echo "- Atari7800Launcher.zip"
+          } > "$NOTES_FILE"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TITLE" --notes-file "$NOTES_FILE"
+          else
+            gh release create "$TAG" --title "$TITLE" --notes-file "$NOTES_FILE"
+          fi
+
+          gh release upload "$TAG" dist/Atari7800Launcher.zip --clobber

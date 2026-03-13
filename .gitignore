@@ -1,0 +1,5 @@
+*.a78
+*.bin
+*.rom
+*.dylib
+.build

@@ -1,0 +1,37 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "swift build",
+      "type": "shell",
+      "command": "swift",
+      "args": ["build"],
+      "group": "build",
+      "problemMatcher": "$swiftc"
+    },
+    {
+      "label": "swift run AppMain",
+      "type": "shell",
+      "command": "swift",
+      "args": ["run", "AppMain"],
+      "group": "test",
+      "problemMatcher": "$swiftc"
+    },
+    {
+      "label": "swift build release",
+      "type": "shell",
+      "command": "swift",
+      "args": ["build", "-c", "release"],
+      "group": "build",
+      "problemMatcher": "$swiftc"
+    },
+    {
+      "label": "package app",
+      "type": "shell",
+      "command": "bash",
+      "args": ["scripts/package-app.sh"],
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}

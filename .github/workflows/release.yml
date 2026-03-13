@@ -62,9 +62,25 @@ jobs:
           TAG="${{ steps.version.outputs.tag }}"
           TITLE="Atari7800Launcher $TAG"
           NOTES_FILE="$(mktemp)"
+          CHANGELOG_URL="https://github.com/maskedamedia/maskeda-media-atari7800launcher/blob/main/CHANGELOG.md"
+          CHANGELOG_SECTION="$(awk '
+            BEGIN { capture = 0 }
+            /^## / {
+              if (capture == 1) exit
+              capture = 1
+            }
+            capture == 1 { print }
+          ' CHANGELOG.md)"
+
           {
-            echo "Automated release for build $TAG."
+            echo "Release $TAG"
             echo
+            echo "[View full changelog]($CHANGELOG_URL)"
+            echo
+            if [ -n "$CHANGELOG_SECTION" ]; then
+              printf '%s\n' "$CHANGELOG_SECTION"
+              echo
+            fi
             echo "Artifacts:"
             echo "- Atari7800Launcher.zip"
           } > "$NOTES_FILE"

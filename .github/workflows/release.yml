@@ -36,13 +36,6 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Upload packaged zip as workflow artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Atari7800Launcher-${{ steps.version.outputs.version }}
-          path: dist/Atari7800Launcher.zip
-          if-no-files-found: error
-
       - name: Create or update release tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

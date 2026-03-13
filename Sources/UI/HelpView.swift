@@ -19,7 +19,7 @@ public struct HelpView: View {
 
                         Text("Git Repository")
                             .font(.headline)
-                        Link("github.com/mpro-maskeda/maskeda-media-atari7800launcher", destination: URL(string: "https://github.com/mpro-maskeda/maskeda-media-atari7800launcher")!)
+                        Link("github.com/maskedamedia/maskeda-media-atari7800launcher", destination: URL(string: "https://github.com/maskedamedia/maskeda-media-atari7800launcher")!)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }

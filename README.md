@@ -163,7 +163,7 @@ read the on-screen log.
 - Email: `info@maskedamedia.com`
 - Website: <https://retrogaming.maskedamedia.com>
 - GitHub repository:
-  <https://github.com/mpro-maskeda/maskeda-media-atari7800launcher>
+  <https://github.com/maskedamedia/maskeda-media-atari7800launcher>
 
 ## Redistribution Notes
 

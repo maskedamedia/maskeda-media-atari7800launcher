@@ -1,4 +1,4 @@
-# prosystem-macos-launcher
+# maskeda-media-atari7800launcher
 
 Native Apple Silicon macOS frontend for `prosystem_libretro.dylib`.
 
@@ -97,7 +97,6 @@ ROM note:
 - Arrow keys: D-pad
 - `Z`: button 1
 - `X`: button 2
-- `Enter`: start
 
 ## BIOS Support
 

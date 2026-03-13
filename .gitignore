@@ -3,3 +3,6 @@
 *.rom
 *.dylib
 .build
+dist/
+*.log
+.DS_Store

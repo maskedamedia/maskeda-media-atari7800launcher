@@ -1,5 +1,7 @@
 # maskeda-media-atari7800launcher
 
+![Atari7800Launcher Logo](Resources/AppBundle/AppIcon.png)
+
 Native Apple Silicon macOS frontend for `prosystem_libretro.dylib`.
 
 This project hosts a libretro core. It does not execute the dylib

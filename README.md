@@ -203,3 +203,10 @@ read the on-screen log.
 - two-player device assignment works without duplicate device selection
 - audio plays without obvious underruns
 - `make package` creates the `.app` and `.zip`
+
+<!-- repository-markdown-index:start -->
+## Repository Markdown index
+
+- [AGENTS.md](AGENTS.md)
+- [CHANGELOG.md](CHANGELOG.md)
+<!-- repository-markdown-index:end -->
